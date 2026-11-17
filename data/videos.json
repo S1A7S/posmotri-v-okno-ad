@@ -1,0 +1,56 @@
+[
+  {
+    "id": "quiet",
+    "title": "Тихая улица",
+    "description": "Учебный постер. Замените ролик и описание материалами из прекода.",
+    "time": "07:30",
+    "period": "day",
+    "src": "./videos/morning.mp4",
+    "poster": "./images/morning.svg"
+  },
+  {
+    "id": "opposite",
+    "title": "Дом напротив",
+    "description": "Учебный постер. Замените ролик и описание материалами из прекода.",
+    "time": "11:45",
+    "period": "day",
+    "src": "./videos/day.mp4",
+    "poster": "./images/day.svg"
+  },
+  {
+    "id": "afternoon",
+    "title": "После полудня",
+    "description": "Учебный постер. Замените ролик и описание материалами из прекода.",
+    "time": "15:20",
+    "period": "day",
+    "src": "./videos/day.mp4",
+    "poster": "./images/day.svg"
+  },
+  {
+    "id": "evening",
+    "title": "Вечерние окна",
+    "description": "Учебный постер. Замените ролик и описание материалами из прекода.",
+    "time": "20:10",
+    "period": "night",
+    "src": "./videos/night.mp4",
+    "poster": "./images/night.svg"
+  },
+  {
+    "id": "late",
+    "title": "Поздний свет",
+    "description": "Учебный постер. Замените ролик и описание материалами из прекода.",
+    "time": "23:30",
+    "period": "night",
+    "src": "./videos/night.mp4",
+    "poster": "./images/night.svg"
+  },
+  {
+    "id": "early",
+    "title": "До рассвета",
+    "description": "Учебный постер. Замените ролик и описание материалами из прекода.",
+    "time": "03:15",
+    "period": "night",
+    "src": "./videos/night.mp4",
+    "poster": "./images/night.svg"
+  }
+]

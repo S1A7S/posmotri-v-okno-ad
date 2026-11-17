@@ -1,121 +1,80 @@
 <!DOCTYPE html>
 <html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Посмотри в окно</title>
-    <link rel="stylesheet" href="./fonts/fonts.css" />
-    <link rel="stylesheet" href="./styles/style.css" />
-    <link rel="stylesheet" href="./styles/preloader.css" />
-    <link rel="stylesheet" href="./styles/error.css" />
-  </head>
-  <body class="page">
-    <main class="content">
-      <section class="result">
-        <div class="result__video-container">
-          <video src="" controls class="result__video" poster=""></video>
-        </div>
-        <form class="search-form">
-          <fieldset class="search-form__fieldset">
-            <h2 class="search-form__fieldset-title">Город</h2>
-            <label class="search-form__label">
-              <span class="search-form__label-text visually-hidden">Город</span>
-              <input
-                type="text"
-                placeholder="Санкт Петербург, например"
-                name="city"
-                class="search-form__textfield"
-              />
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Посмотри в окно — локальный каталог видео с поиском по времени суток.">
+  <title>Посмотри в окно</title>
+  <link rel="stylesheet" href="./styles/style.css">
+  <script src="./scripts/script.js" defer></script>
+</head>
+<body class="page">
+  <header class="header">
+    <h1 class="header__title"><span>По</span>смотри<br>в окно</h1>
+    <p class="header__description">Выберите время. Найдите своё окно.</p>
+  </header>
+  <main class="content">
+    <section class="search" aria-labelledby="search-title">
+      <h2 class="search__title" id="search-title">Когда посмотрим?</h2>
+      <form class="search-form" novalidate>
+        <fieldset class="search-form__fieldset">
+          <legend class="search-form__legend">Время съёмки</legend>
+          <div class="search-form__range">
+            <label class="search-form__field">С
+              <input class="search-form__textfield" name="from" inputmode="numeric" placeholder="00:00" maxlength="5" aria-describedby="range-hint search-error">
             </label>
-          </fieldset>
-          <fieldset class="search-form__fieldset">
-            <h2 class="search-form__fieldset-title">Время суток</h2>
-            <div class="search-form__checkbox-list">
-              <label class="search-form__label">
-                <input
-                  type="checkbox"
-                  name="time"
-                  value="morning"
-                  class="search-form__checkbox visually-hidden"
-                />
-                <span class="search-form__pseudo-checkbox"></span>
-                <span class="search-form__label-text">Утро</span>
-              </label>
-              <label class="search-form__label">
-                <input
-                  type="checkbox"
-                  name="time"
-                  value="afternoon"
-                  class="search-form__checkbox visually-hidden"
-                />
-                <span class="search-form__pseudo-checkbox"></span>
-                <span class="search-form__label-text">День</span>
-              </label>
-              <label class="search-form__label">
-                <input
-                  type="checkbox"
-                  name="time"
-                  value="night"
-                  class="search-form__checkbox visually-hidden"
-                />
-                <span class="search-form__pseudo-checkbox"></span>
-                <span class="search-form__label-text">Ночь</span>
-              </label>
-            </div>
-          </fieldset>
-          <button type="submit" class="button search-form__submit-button">
-            Найти
-          </button>
-        </form>
-      </section>
-      <section class="content__details">
-        <h1 class="title">
-          <span class="content__accent">По-</span><br />смотри<br />в окно
-        </h1>
-        <div class="content__list-container">
-          <ul class="content__list">
-            <!-- ЗДЕСЬ ОКАЖУТСЯ ТЕМПЛЕЙТЫ КАРТОЧЕК -->
-          </ul>
-        </div>
-      </section>
-    </main>
-
-    <!-- ТЕМПЛЕЙТЫ -->
-
-    <template class="preloader-template">
-      <div class="preloader">
-        <div class="preloader-chasing-squares">
-          <div class="square"></div>
-          <div class="square"></div>
-          <div class="square"></div>
-          <div class="square"></div>
-        </div>
+            <label class="search-form__field">По
+              <input class="search-form__textfield" name="to" inputmode="numeric" placeholder="23:59" maxlength="5" aria-describedby="range-hint search-error">
+            </label>
+          </div>
+          <p class="search-form__hint" id="range-hint">Формат ЧЧ:ММ. Пустой диапазон — любое время.</p>
+        </fieldset>
+        <fieldset class="search-form__fieldset">
+          <legend class="search-form__legend">Время суток</legend>
+          <div class="search-form__periods">
+            <label class="search-form__checkbox-label">
+              <input class="search-form__checkbox visually-hidden" type="checkbox" name="period" value="day">
+              <span class="search-form__pseudo-checkbox" aria-hidden="true"></span>День
+            </label>
+            <label class="search-form__checkbox-label">
+              <input class="search-form__checkbox visually-hidden" type="checkbox" name="period" value="night">
+              <span class="search-form__pseudo-checkbox" aria-hidden="true"></span>Ночь
+            </label>
+          </div>
+        </fieldset>
+        <button class="button search-form__submit-button" type="submit">Найти</button>
+        <p class="search-form__error" id="search-error" role="alert"></p>
+      </form>
+    </section>
+    <section class="results" aria-labelledby="results-title" aria-busy="false">
+      <div class="results__heading">
+        <h2 class="results__title" id="results-title">Окна</h2>
+        <p class="results__summary" role="status" aria-live="polite"></p>
       </div>
-    </template>
-
-    <template class="cards-list-item-template">
-      <li class="content__list-item">
-        <a href="#0" class="content__card-link">
-          <article class="content__video-card">
-            <div class="content__video-card-description-container">
-              <h2 class="content__video-card-title"></h2>
-              <p class="content__video-card-description"></p>
-            </div>
-            <img src="" alt="" class="content__video-card-thumbnail" />
-          </article>
-        </a>
-      </li>
-    </template>
-    <template class="more-button-template">
-      <button class="button more-button">Показать еще</button>
-    </template>
-
-    <template class="error-template">
-      <div class="error">
-        <h2 class="error__title">Из этого города нет видео :(</h2>
+      <p class="preloader" role="status" hidden>Загружаем окна…</p>
+      <div class="results__error" role="alert" hidden>
+        <p class="results__error-text"></p>
+        <button class="button results__retry" type="button">Повторить</button>
       </div>
-    </template>
-    <script src="./scripts/script.js"></script>
-  </body>
+      <ul class="content__list"></ul>
+    </section>
+  </main>
+  <footer class="footer"><p>Посмотри в окно · локальная видеотека</p></footer>
+  <template id="video-card-template">
+    <li class="content__list-item">
+      <article class="video-card">
+        <div class="video-card__media">
+          <video class="video-card__video" controls playsinline preload="none"></video>
+          <span class="video-card__label"></span>
+        </div>
+        <div class="video-card__body">
+          <h3 class="video-card__title"></h3>
+          <p class="video-card__description"></p>
+          <p class="video-card__time"></p>
+          <p class="video-card__error" hidden>Ролик недоступен. Проверьте локальный файл, указанный в data/videos.json.</p>
+        </div>
+      </article>
+    </li>
+  </template>
+</body>
 </html>

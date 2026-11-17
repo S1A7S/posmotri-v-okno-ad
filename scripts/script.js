@@ -1,308 +1,169 @@
-/* КОНФИГ */
-const preloaderWaitindTime = 1200;
-const cardsOnPage = 5;
-const BASE_URL = 'https://v-content.practicum-team.ru';
-const endpoint = `${BASE_URL}/api/videos?pagination[pageSize]=${cardsOnPage}&`;
+'use strict';
 
-/* ЭЛЕМЕНТЫ СТРАНИЦЫ */
-const cardsList = document.querySelector('.content__list');
-const cardsContainer = document.querySelector('.content__list-container');
-const videoContainer = document.querySelector('.result__video-container');
-const videoElement = document.querySelector('.result__video');
-const form = document.querySelector('form');
+const dataUrl = './data/videos.json'; // TODO: путь к JSON из прекода.
+const form = document.querySelector('.search-form');
+const fromInput = form.elements.from;
+const toInput = form.elements.to;
+const searchButton = form.querySelector('button[type="submit"]');
+const errorField = document.querySelector('#search-error');
+const results = document.querySelector('.results');
+const list = document.querySelector('.content__list');
+const summary = document.querySelector('.results__summary');
+const loader = document.querySelector('.preloader');
+const errorBox = document.querySelector('.results__error');
+const retryButton = document.querySelector('.results__retry');
+const template = document.querySelector('#video-card-template');
+const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+let busy = false;
+let lastFilters = { from: '', to: '', periods: [] };
 
-/* ТЕМПЛЕЙТЫ */
-const cardTmp = document.querySelector('.cards-list-item-template');
-const preloaderTmp = document.querySelector('.preloader-template');
-const videoNotFoundTmp = document.querySelector('.error-template');
-const moreButtonTmp = document.querySelector('.more-button-template');
+function minutes(value) {
+  const [hours, mins] = value.split(':').map(Number);
+  return hours * 60 + mins;
+}
 
-/* МЕХАНИКА */
-
-// Нужен для работы с переключателями
-let cardsOnPageState = [];
-
-// Первая загрузка ✅
-
-showPreloader(preloaderTmp, videoContainer);
-showPreloader(preloaderTmp, cardsContainer);
-mainMechanics(endpoint);
-
-// осуществляется поиск ✅
-form.onsubmit = (e) => {
-  e.preventDefault();
-
-  cardsList.textContent = '';
-  const buttonInDOM = cardsContainer.querySelector('.more-button');
-  if (buttonInDOM) {
-    buttonInDOM.remove();
-  }
-
-  [...videoContainer.children].forEach((el) => {
-    el.className === 'error' && el.remove();
+function clearErrors() {
+  errorField.textContent = '';
+  [fromInput, toInput].forEach((input) => {
+    input.setCustomValidity('');
+    input.removeAttribute('aria-invalid');
   });
+}
 
-  showPreloader(preloaderTmp, videoContainer);
-  showPreloader(preloaderTmp, cardsContainer);
+function validateRange() {
+  clearErrors();
+  const from = fromInput.value.trim();
+  const to = toInput.value.trim();
+  let message = '';
+  let invalid = [];
+  if (from && !timePattern.test(from)) {
+    message = 'Введите время «с» в формате ЧЧ:ММ, от 00:00 до 23:59.';
+    invalid = [fromInput];
+  } else if (to && !timePattern.test(to)) {
+    message = 'Введите время «по» в формате ЧЧ:ММ, от 00:00 до 23:59.';
+    invalid = [toInput];
+  } else if (Boolean(from) !== Boolean(to)) {
+    message = 'Заполните оба поля диапазона или оставьте оба пустыми.';
+    invalid = [from ? toInput : fromInput];
+  } else if (from && minutes(from) > minutes(to)) {
+    message = 'Время «с» должно быть не позже времени «по». Диапазон через полночь разделите на два поиска.';
+    invalid = [fromInput, toInput];
+  }
+  if (message) {
+    errorField.textContent = message;
+    invalid.forEach((input) => {
+      input.setCustomValidity(message);
+      input.setAttribute('aria-invalid', 'true');
+    });
+    invalid[0].focus();
+    return null;
+  }
+  return { from, to, periods: [...form.querySelectorAll('[name="period"]:checked')].map((input) => input.value) };
+}
 
-  const formData = serializeFormData(form);
-  const requestUrl = generateFilterRequest(
-    endpoint,
-    formData.city,
-    formData.timeArray
-  );
+function localMediaPath(path, folder) {
+  if (typeof path !== 'string' || !path.startsWith(`./${folder}/`)) {
+    throw new Error('В каталоге указан некорректный локальный путь к медиа.');
+  }
+  const url = new URL(path, document.baseURI);
+  const allowed = new URL(`./${folder}/`, document.baseURI);
+  if (url.origin !== allowed.origin || !url.pathname.startsWith(allowed.pathname)) {
+    throw new Error('В каталоге допускаются только локальные медиа проекта.');
+  }
+  return url.href;
+}
 
-  mainMechanics(requestUrl);
-};
+function validateData(data) {
+  if (!Array.isArray(data)) throw new Error('Файл данных должен содержать массив видео.');
+  const ids = new Set();
+  data.forEach((video) => {
+    if (!video || typeof video.id !== 'string' || ids.has(video.id) ||
+        typeof video.title !== 'string' || typeof video.description !== 'string' ||
+        !timePattern.test(video.time) || !['day', 'night'].includes(video.period)) {
+      throw new Error('Проверьте структуру, время и уникальность id в файле данных.');
+    }
+    ids.add(video.id);
+    localMediaPath(video.src, 'videos');
+    localMediaPath(video.poster, 'images');
+  });
+  return data;
+}
 
-/* ФУНКЦИЯ, КОТОРАЯ ВСЕ ГЕНЕРИТ */
+function renderVideos(videos) {
+  const fragment = document.createDocumentFragment();
+  videos.forEach((data) => {
+    const item = template.content.firstElementChild.cloneNode(true);
+    const video = item.querySelector('video');
+    const error = item.querySelector('.video-card__error');
+    video.poster = localMediaPath(data.poster, 'images');
+    video.addEventListener('error', () => { error.hidden = false; });
+    video.src = localMediaPath(data.src, 'videos');
+    video.setAttribute('aria-label', data.title);
+    video.addEventListener('play', () => {
+      list.querySelectorAll('video').forEach((other) => { if (other !== video) other.pause(); });
+    });
+    item.querySelector('.video-card__title').textContent = data.title;
+    item.querySelector('.video-card__description').textContent = data.description;
+    item.querySelector('.video-card__time').textContent = `Время съёмки: ${data.time}`;
+    item.querySelector('.video-card__label').textContent = data.period === 'day' ? 'День' : 'Ночь';
+    fragment.append(item);
+  });
+  list.replaceChildren(fragment);
+}
 
-async function mainMechanics(endpoint) {
+async function search(filters, resetForm = false) {
+  if (busy) return;
+  busy = true;
+  lastFilters = filters;
+  searchButton.disabled = true;
+  retryButton.disabled = true;
+  searchButton.textContent = 'Ищем…';
+  results.setAttribute('aria-busy', 'true');
+  loader.hidden = false;
+  errorBox.hidden = true;
+  list.hidden = true;
+  summary.textContent = '';
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    const data = await (await fetch(endpoint)).json();
-    cardsOnPageState = data.results;
-
-    if (!data?.results?.[0]) {
-      throw new Error('not-found');
+    if (location.protocol === 'file:') {
+      throw new Error('Откройте проект через локальный HTTP-сервер: браузер не разрешает fetch JSON по file://. Инструкция находится в LOCAL-START.txt.');
     }
-
-    appendCards({
-      baseUrl: BASE_URL,
-      dataArray: data.results,
-      cardTmp,
-      container: cardsList,
-    });
-
-    setVideo({
-      baseUrl: BASE_URL,
-      video: videoElement,
-      videoUrl: data.results[0].video.url,
-      posterUrl: data.results[0].poster.url,
-    });
-    document
-      .querySelectorAll('.content__card-link')[0]
-      .classList.add('content__card-link_current');
-    await waitForReadyVideo(videoElement);
-    await delay(preloaderWaitindTime);
-    removePreloader(videoContainer, '.preloader');
-    removePreloader(cardsContainer, '.preloader');
-
-    // Добавляем класс для стилизации скроллбара
-    cardsContainer.classList.add('custom-scrollbar');
-
-    chooseCurrentVideo({
-      baseUrl: BASE_URL,
-      videoData: cardsOnPageState,
-      cardLinksSelector: '.content__card-link',
-      currentLinkClassName: 'content__card-link_current',
-      mainVideo: videoElement,
-    });
-
-    showMoreCards({
-      dataArray: data,
-      buttonTemplate: moreButtonTmp,
-      cardsList,
-      buttonSelector: '.more-button',
-      initialEndpoint: endpoint,
-      baseUrl: BASE_URL,
-      cardTmp: cardTmp,
-    });
-  } catch (err) {
-    if (err.message === 'not-found') {
-      showError(videoContainer, videoNotFoundTmp, 'Нет подходящих видео =(');
-    } else {
-      showError(videoContainer, videoNotFoundTmp, 'Ошибка получения данных :(');
-    }
-    console.log(err);
-    removePreloader(videoContainer, '.preloader');
-    removePreloader(cardsContainer, '.preloader');
+    const response = await fetch(dataUrl, { signal: controller.signal, cache: 'no-store' });
+    if (!response.ok) throw new Error(`Не удалось загрузить каталог (HTTP ${response.status}). Проверьте путь ${dataUrl}.`);
+    const data = validateData(await response.json());
+    const matches = data.filter((video) =>
+      (!filters.periods.length || filters.periods.includes(video.period)) &&
+      (!filters.from || (minutes(video.time) >= minutes(filters.from) && minutes(video.time) <= minutes(filters.to)))
+    );
+    renderVideos(matches);
+    const periodText = filters.periods.length === 1 ? (filters.periods[0] === 'day' ? 'день' : 'ночь') : 'любое время суток';
+    summary.textContent = `Найдено: ${matches.length}. ${filters.from ? `${filters.from}–${filters.to}` : 'Весь день'}, ${periodText}.`;
+    list.hidden = false;
+    if (resetForm) form.reset();
+    clearErrors();
+  } catch (error) {
+    errorBox.querySelector('p').textContent = error.name === 'AbortError'
+      ? 'Загрузка заняла слишком много времени. Попробуйте ещё раз.'
+      : error instanceof SyntaxError ? 'В файле каталога некорректный JSON.'
+      : error.message || 'Не удалось загрузить видео. Проверьте локальный сервер.';
+    errorBox.hidden = false;
+  } finally {
+    clearTimeout(timeout);
+    loader.hidden = true;
+    searchButton.disabled = false;
+    retryButton.disabled = false;
+    searchButton.textContent = 'Найти';
+    results.setAttribute('aria-busy', 'false');
+    busy = false;
   }
 }
 
-/* УТИЛИТЫ */
-
-// Простой промис, чтобы легче ставить паузу ✅
-
-async function delay(ms) {
-  return await new Promise((resolve) => {
-    return setTimeout(resolve, ms);
-  });
-}
-
-// Промис, который резолвится, если видео целиком готово к проинрыванию без пауз
-
-async function waitForReadyVideo(video) {
-  return await new Promise((resolve) => {
-    video.oncanplaythrough = resolve;
-  });
-}
-
-// Устанавливает прелоадер на время загрузки данных ✅
-function showPreloader(tmp, parent) {
-  const node = tmp.content.cloneNode(true);
-  parent.append(node);
-  console.log('показал прелоадер');
-}
-
-// Убирает прелоадер из DOM ✅
-function removePreloader(parent, preloaderSelector) {
-  const preloader = parent.querySelector(preloaderSelector);
-  if (preloader) {
-    preloader.remove();
-  }
-
-  console.log('убрал прелоадер');
-}
-
-// Добавляет карточки в контейнер, собирая их из данных API ✅
-function appendCards({ baseUrl, dataArray, cardTmp, container }) {
-  dataArray.forEach((el) => {
-    const node = cardTmp.content.cloneNode(true);
-    node.querySelector('a').setAttribute('id', el.id);
-    node.querySelector('.content__video-card-title').textContent = el.city;
-    node.querySelector('.content__video-card-description').textContent =
-      el.description;
-    node
-      .querySelector('.content__video-card-thumbnail')
-      .setAttribute('src', `${baseUrl}${el.thumbnail.url}`);
-    node
-      .querySelector('.content__video-card-thumbnail')
-      .setAttribute('alt', el.description);
-    container.append(node);
-  });
-  console.log('Сгенерировал карточки');
-}
-
-// Устанавливет внужное видео в контейнер ✅
-function setVideo({ baseUrl, video, videoUrl, posterUrl }) {
-  video.setAttribute('src', `${baseUrl}${videoUrl}`);
-  video.setAttribute('poster', `${baseUrl}${posterUrl}`);
-  console.log('Подставил видео в основной блок');
-}
-
-// получает данные из формы и сериализует как надо ✅
-
-function serializeFormData(form) {
-  const city = form.querySelector('input[name="city"]');
-  const checkboxes = form.querySelectorAll('input[name="time"]');
-  const checkedValuesArray = [...checkboxes].reduce((acc, item) => {
-    item.checked && acc.push(item.value);
-    return acc;
-  }, []);
-  console.log('Собрал данные формы в объект');
-  return {
-    city: city.value,
-    timeArray: checkedValuesArray,
-  };
-}
-
-// Генерирует строку с фильтрами запросов в API в зависимости от данных из формы ✅
-function generateFilterRequest(endpoint, city, timeArray) {
-  if (city) {
-    endpoint += `filters[city][$containsi]=${city}&`;
-  }
-  if (timeArray) {
-    timeArray.forEach((timeslot) => {
-      endpoint += `filters[time_of_day][$eqi]=${timeslot}&`;
-    });
-  }
-  console.log('Сгенерировал строку адреса запроса в API из данных формы');
-  return endpoint;
-}
-
-// переключает текущее видео ✅
-function chooseCurrentVideo({
-  baseUrl,
-  videoData,
-  cardLinksSelector,
-  currentLinkClassName,
-  mainVideo,
-}) {
-  const cardsList = document.querySelectorAll(cardLinksSelector);
-  if (cardsList) {
-    cardsList.forEach((item) => {
-      item.onclick = async (e) => {
-        e.preventDefault();
-        cardsList.forEach((item) => {
-          item.classList.remove(currentLinkClassName);
-        });
-        item.classList.add(currentLinkClassName);
-        showPreloader(preloaderTmp, videoContainer);
-        const vidoObj = videoData.find(
-          (video) => String(video.id) === String(item.id)
-        );
-        setVideo({
-          baseUrl,
-          video: mainVideo,
-          videoUrl: vidoObj.video.url,
-          posterUrl: vidoObj.poster.url,
-        });
-        await waitForReadyVideo(mainVideo);
-        await delay(preloaderWaitindTime);
-        removePreloader(videoContainer, '.preloader');
-        console.log('Переключил видео');
-      };
-    });
-  }
-}
-
-// вывожу интерфейс, когда видео не найдено ✅
-function showError(container, errorTemplate, errorMessage) {
-  const node = errorTemplate.content.cloneNode(true);
-  node.querySelector('.error__title').textContent = errorMessage;
-  container.append(node);
-  console.log('показал, ошибку');
-}
-
-// вывожу больше видео, если в пагинации больше страниц, чем показано
-
-function showMoreCards({
-  dataArray,
-  buttonTemplate,
-  cardsList,
-  buttonSelector,
-  initialEndpoint,
-  baseUrl,
-  cardTmp,
-}) {
-  if (dataArray.pagination.page === dataArray.pagination.pageCount) return;
-  // добавить кнопку из темплейта в конец списка карточек
-  const button = buttonTemplate.content.cloneNode(true);
-  cardsContainer.append(button);
-  // Выберем добавленный элемент по селектору и добавим слушатель клика
-  const buttonInDOM = cardsContainer.querySelector(buttonSelector);
-  buttonInDOM.addEventListener('click', async () => {
-    // по клику запросим данные для следующей страницы
-    let currentPage = dataArray.pagination.page;
-    let urlToFetch = `${initialEndpoint}pagination[page]=${(currentPage += 1)}&`;
-    try {
-      let data = await (await fetch(urlToFetch)).json();
-      buttonInDOM.remove();
-      cardsOnPageState = cardsOnPageState.concat(data.results);
-      appendCards({
-        baseUrl,
-        dataArray: data.results,
-        cardTmp,
-        container: cardsList,
-      });
-      chooseCurrentVideo({
-        baseUrl: BASE_URL,
-        videoData: cardsOnPageState,
-        cardLinksSelector: '.content__card-link',
-        currentLinkClassName: 'content__card-link_current',
-        mainVideo: videoElement,
-      });
-      showMoreCards({
-        dataArray: data,
-        buttonTemplate,
-        cardsList,
-        buttonSelector,
-        initialEndpoint,
-        baseUrl,
-        cardTmp,
-      });
-    } catch (err) {
-      return err;
-    }
-  });
-}
+form.addEventListener('input', clearErrors);
+form.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const filters = validateRange();
+  if (filters) search(filters, true);
+});
+retryButton.addEventListener('click', () => search(lastFilters, true));
+search(lastFilters);
